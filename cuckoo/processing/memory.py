@@ -59,9 +59,7 @@ except NameError as e:
     raise
 
 def s(o):
-    if isinstance(o, obj.NoneObject):
-        return None
-    return str(o)
+    return None if isinstance(o, obj.NoneObject) else str(o)
 
 class VolatilityAPI(object):
     """ Volatility API interface."""
@@ -128,15 +126,16 @@ class VolatilityAPI(object):
             "dtb": None,
             "output": None,
             "info": None,
-            "location": "file://%s" % self.memdump,
+            "location": f"file://{self.memdump}",
             "plugins": None,
             "debug": None,
             "cache_dtb": True,
             "filename": None,
             "cache_directory": None,
             "verbose": None,
-            "write": False
+            "write": False,
         }
+
 
         for key, value in base_conf.items():
             self.config.update(key, value)
@@ -166,11 +165,9 @@ class VolatilityAPI(object):
         """Volatility pslist plugin.
         @see volatility/plugins/taskmods.py
         """
-        results = []
-
         command = taskmods.PSList(self.config)
-        for process in command.calculate():
-            results.append({
+        results = [
+            {
                 "process_name": str(process.ImageFileName),
                 "process_id": int(process.UniqueProcessId),
                 "parent_id": int(process.InheritedFromUniqueProcessId),
@@ -179,7 +176,9 @@ class VolatilityAPI(object):
                 "session_id": s(process.SessionId),
                 "create_time": str(process.CreateTime or ""),
                 "exit_time": str(process.ExitTime or ""),
-            })
+            }
+            for process in command.calculate()
+        ]
 
         return dict(config={}, data=results)
 
@@ -187,11 +186,9 @@ class VolatilityAPI(object):
         """Volatility psxview plugin.
         @see volatility/plugins/malware/psxview.py
         """
-        results = []
-
         command = self.plugins["psxview"](self.config)
-        for offset, process, ps_sources in command.calculate():
-            results.append({
+        results = [
+            {
                 "process_name": str(process.ImageFileName),
                 "process_id": int(process.UniqueProcessId),
                 "pslist": str(offset in ps_sources["pslist"]),
@@ -201,7 +198,9 @@ class VolatilityAPI(object):
                 "csrss": str(offset in ps_sources["csrss"]),
                 "session": str(offset in ps_sources["session"]),
                 "deskthrd": str(offset in ps_sources["deskthrd"]),
-            })
+            }
+            for offset, process, ps_sources in command.calculate()
+        ]
 
         return dict(config={}, data=results)
 
@@ -213,11 +212,9 @@ class VolatilityAPI(object):
 
         command = self.plugins["callbacks"](self.config)
         for (sym, cb, detail), mods, mod_addrs in command.calculate():
-            module = tasks.find_module(
+            if module := tasks.find_module(
                 mods, mod_addrs, self.addr_space.address_mask(cb)
-            )
-
-            if module:
+            ):
                 module_name = module.BaseDllName or module.FullDllName
             else:
                 module_name = "UNKNOWN"
@@ -272,11 +269,7 @@ class VolatilityAPI(object):
             selector = n * 8
 
             # Is the entry present? This applies to all types of GDT entries
-            if entry.Present:
-                present = "P"
-            else:
-                present = "Np"
-
+            present = "P" if entry.Present else "Np"
             # The base, limit, and granularity is calculated differently
             # for 32bit call gates than they are for all other types.
             if entry.Type == "CallGate32":
@@ -286,11 +279,7 @@ class VolatilityAPI(object):
             else:
                 base = entry.Base
                 limit = entry.Limit
-                if entry.Granularity:
-                    granularity = "Pg"
-                else:
-                    granularity = "By"
-
+                granularity = "Pg" if entry.Granularity else "By"
             # The parent is GDT. The grand-parent is _KPCR.
             cpu_number = entry.obj_parent.obj_parent.ProcessorBlock.Number
 
@@ -369,22 +358,19 @@ class VolatilityAPI(object):
                     if ret is not None:
                         hooked, data, dest_addr = ret
                         if hooked:
-                            # We found a hook, try to resolve the hooker.
-                            # No mask required because we currently only work
-                            # on x86 anyway.
-                            hook_mod = tasks.find_module(
+                            if hook_mod := tasks.find_module(
                                 mods, mod_addrs, dest_addr
-                            )
-                            if hook_mod:
+                            ):
                                 hook_name = "{0}".format(hook_mod.BaseDllName)
                             else:
                                 hook_name = "UNKNOWN"
 
                             # Report it now.
-                            new.update({
+                            new |= {
                                 "hook_dest_addr": "{0:#x}".format(dest_addr),
                                 "hook_name": hook_name,
-                            })
+                            }
+
 
                 results.append(new)
 
@@ -398,16 +384,8 @@ class VolatilityAPI(object):
 
         command = self.plugins["timers"](self.config)
         for timer, module in command.calculate():
-            if timer.Header.SignalState.v():
-                signaled = "Yes"
-            else:
-                signaled = "-"
-
-            if module:
-                module_name = str(module.BaseDllName or "")
-            else:
-                module_name = "UNKNOWN"
-
+            signaled = "Yes" if timer.Header.SignalState.v() else "-"
+            module_name = str(module.BaseDllName or "") if module else "UNKNOWN"
             due_time = "{0:#010x}:{1:#010x}".format(
                 timer.DueTime.HighPart, timer.DueTime.LowPart
             )
@@ -457,18 +435,21 @@ class VolatilityAPI(object):
                         module = command.translate_hmod(
                             winsta, atom_tables, hook.ihmod
                         )
-                        results.append({
-                            "offset": hex(int(hook.obj_offset)),
-                            "session": int(winsta.dwSessionId),
-                            "desktop": "{0}\\{1}".format(
-                                winsta.Name, desk.Name
-                            ),
-                            "thread": str(info),
-                            "filter": str(name),
-                            "flags": str(hook.flags),
-                            "function": hex(int(hook.offPfn)),
-                            "module": str(module),
-                        })
+                        results.append(
+                            {
+                                "offset": hex(int(hook.obj_offset)),
+                                "session": int(winsta.dwSessionId),
+                                "desktop": "{0}\\{1}".format(
+                                    winsta.Name, desk.Name
+                                ),
+                                "thread": info,
+                                "filter": str(name),
+                                "flags": str(hook.flags),
+                                "function": hex(int(hook.offPfn)),
+                                "module": str(module),
+                            }
+                        )
+
 
         return dict(config={}, data=results)
 
@@ -488,21 +469,22 @@ class VolatilityAPI(object):
             for sid_string in token.get_sids():
                 if sid_string in sidm.well_known_sids:
                     sid_name = " {0}".format(sidm.well_known_sids[sid_string])
+                elif sid_name_re := sidm.find_sid_re(
+                    sid_string, sidm.well_known_sid_re
+                ):
+                    sid_name = " {0}".format(sid_name_re)
                 else:
-                    sid_name_re = sidm.find_sid_re(
-                        sid_string, sidm.well_known_sid_re
-                    )
-                    if sid_name_re:
-                        sid_name = " {0}".format(sid_name_re)
-                    else:
-                        sid_name = ""
+                    sid_name = ""
 
-                results.append({
-                    "filename": str(task.ImageFileName),
-                    "process_id": int(task.UniqueProcessId),
-                    "sid_string": str(sid_string),
-                    "sid_name": str(sid_name),
-                })
+                results.append(
+                    {
+                        "filename": str(task.ImageFileName),
+                        "process_id": int(task.UniqueProcessId),
+                        "sid_string": str(sid_string),
+                        "sid_name": sid_name,
+                    }
+                )
+
 
         return dict(config={}, data=results)
 
@@ -600,7 +582,9 @@ class VolatilityAPI(object):
 
             hexdump = "".join(
                 "{0:#010x}  {1:<48}  {2}\n".format(addr + o, h, ''.join(c))
-                for o, h, c in utils.Hexdump(content[0:64]))
+                for o, h, c in utils.Hexdump(content[:64])
+            )
+
 
             results.append({
                 "rule": hit.rule,
@@ -674,17 +658,17 @@ class VolatilityAPI(object):
         """Volatility handles plugin.
         @see volatility/plugins/handles.py
         """
-        results = []
-
         command = self.plugins["handles"](self.config)
-        for pid, handle, object_type, name in command.calculate():
-            results.append({
+        results = [
+            {
                 "process_id": int(pid),
                 "handle_value": str(handle.HandleValue),
                 "handle_granted_access": str(handle.GrantedAccess),
                 "handle_type": str(object_type),
-                "handle_name": str(name)
-            })
+                "handle_name": str(name),
+            }
+            for pid, handle, object_type, name in command.calculate()
+        ]
 
         return dict(config={}, data=results)
 
@@ -698,15 +682,9 @@ class VolatilityAPI(object):
         for task in command.calculate():
             # Build a dictionary for all three PEB lists where the
             # keys are base address and module objects are the values.
-            inloadorder = dict(
-                (mod.DllBase.v(), mod) for mod in task.get_load_modules()
-            )
-            ininitorder = dict(
-                (mod.DllBase.v(), mod) for mod in task.get_init_modules()
-            )
-            inmemorder = dict(
-                (mod.DllBase.v(), mod) for mod in task.get_mem_modules()
-            )
+            inloadorder = {mod.DllBase.v(): mod for mod in task.get_load_modules()}
+            ininitorder = {mod.DllBase.v(): mod for mod in task.get_init_modules()}
+            inmemorder = {mod.DllBase.v(): mod for mod in task.get_mem_modules()}
 
             # Build a similar dictionary for the mapped files.
             mapped_files = {}
@@ -726,11 +704,11 @@ class VolatilityAPI(object):
 
             # For each base address with a mapped file, print info on
             # the other PEB lists to spot discrepancies.
-            for base in mapped_files.keys():
+            for base in mapped_files:
                 # Does the base address exist in the PEB DLL lists?
-                load_mod = inloadorder.get(base, None)
-                init_mod = ininitorder.get(base, None)
-                mem_mod = inmemorder.get(base, None)
+                load_mod = inloadorder.get(base)
+                init_mod = ininitorder.get(base)
+                mem_mod = inmemorder.get(base)
 
                 new = {
                     "process_id": int(task.UniqueProcessId),
@@ -824,9 +802,7 @@ class VolatilityAPI(object):
 
                 new["devices"].append(new_device)
 
-                level = 0
-
-                for att_device in device.attached_devices():
+                for level, att_device in enumerate(device.attached_devices()):
                     body_offset = att_device.obj_vm.profile.get_obj_offset(
                         "_OBJECT_HEADER", "Body"
                     )
@@ -838,10 +814,7 @@ class VolatilityAPI(object):
                     )
 
                     device_name = str(device_header.NameInfo.Name or "")
-                    name = "%s - %s" % (
-                        device_name,
-                        str(att_device.DriverObject.DriverName or "")
-                    )
+                    name = f'{device_name} - {str((att_device.DriverObject.DriverName or ""))}'
 
                     device_type = devicetree.DEVICE_CODES.get(
                         att_device.DeviceType.v(), "UNKNOWN"
@@ -855,8 +828,6 @@ class VolatilityAPI(object):
                         "attached_device_type": device_type,
                     })
 
-                    level += 1
-
             results.append(new)
 
         return dict(config={}, data=results)
@@ -865,11 +836,9 @@ class VolatilityAPI(object):
         """Volatility svcscan plugin - scans for services.
         @see volatility/plugins/malware/svcscan.py
         """
-        results = []
-
         command = self.plugins["svcscan"](self.config)
-        for rec in command.calculate():
-            results.append({
+        results = [
+            {
                 "service_offset": "{0:#x}".format(rec.obj_offset),
                 "service_order": int(rec.Order),
                 "process_id": int(rec.Pid),
@@ -877,8 +846,10 @@ class VolatilityAPI(object):
                 "service_display_name": str(rec.DisplayName.dereference()),
                 "service_type": str(rec.Type),
                 "service_binary_path": s(rec.Binary),
-                "service_state": str(rec.State)
-            })
+                "service_state": str(rec.State),
+            }
+            for rec in command.calculate()
+        ]
 
         return dict(config={}, data=results)
 
@@ -886,17 +857,17 @@ class VolatilityAPI(object):
         """Volatility modscan plugin.
         @see volatility/plugins/modscan.py
         """
-        results = []
-
         command = self.plugins["modscan"](self.config)
-        for ldr_entry in command.calculate():
-            results.append({
+        results = [
+            {
                 "kernel_module_offset": "{0:#x}".format(ldr_entry.obj_offset),
                 "kernel_module_name": str(ldr_entry.BaseDllName or ""),
                 "kernel_module_file": str(ldr_entry.FullDllName or ""),
                 "kernel_module_base": "{0:#x}".format(ldr_entry.DllBase),
                 "kernel_module_size": int(ldr_entry.SizeOfImage),
-            })
+            }
+            for ldr_entry in command.calculate()
+        ]
 
         return dict(config={}, data=results)
 
@@ -904,28 +875,20 @@ class VolatilityAPI(object):
         """Volatility imageinfo plugin.
         @see volatility/plugins/imageinfo.py
         """
-        results = []
-
         command = self.plugins["imageinfo"](self.config)
-        new = {}
-        for key, value in command.calculate():
-            new[key] = value
-
+        new = dict(command.calculate())
         osp = new["Suggested Profile(s)"].split(",")[0]
         new["osprofile"] = osp
-        results.append(new)
-
+        results = [new]
         return dict(config={}, data=results)
 
     def sockscan(self):
         """Volatility sockscan plugin.
         @see volatility/plugins/sockscan.py
         """
-        results = []
-
         command = self.plugins["sockscan"](self.config)
-        for sock in command.calculate():
-            results.append({
+        results = [
+            {
                 "offset": "{0:#010x}".format(sock.obj_offset),
                 "process_id": str(sock.Pid),
                 "address": str(sock.LocalIpAddress),
@@ -936,7 +899,9 @@ class VolatilityAPI(object):
                 "create_time": time.strftime(
                     "%Y-%m-%d %H:%M:%S", time.gmtime(int(sock.CreateTime))
                 ),
-            })
+            }
+            for sock in command.calculate()
+        ]
 
         return dict(config={}, data=results)
 
@@ -944,11 +909,9 @@ class VolatilityAPI(object):
         """Volatility sockscan plugin.
         @see volatility/plugins/netscan.py
         """
-        results = []
-
         commands = self.plugins["netscan"](self.config).calculate()
-        for net_obj, proto, laddr, lport, raddr, rport, state in commands:
-            results.append({
+        results = [
+            {
                 "offset": "{0:#010x}".format(net_obj.obj_offset),
                 "process_id": str(net_obj.Owner.UniqueProcessId),
                 "local_address": s(laddr),
@@ -956,7 +919,9 @@ class VolatilityAPI(object):
                 "remote_address": s(raddr),
                 "remote_port": str(rport),
                 "protocol": str(proto),
-            })
+            }
+            for net_obj, proto, laddr, lport, raddr, rport, state in commands
+        ]
 
         return dict(config={}, data=results)
 
@@ -993,9 +958,11 @@ class VolatilityManager(object):
         self.memfile = memfile
         self.osprofile = osprofile
 
-        for pid in config("memory:mask:pid_generic"):
-            if pid and pid.isdigit():
-                self.mask_pid.append(int(pid))
+        self.mask_pid.extend(
+            int(pid)
+            for pid in config("memory:mask:pid_generic")
+            if pid and pid.isdigit()
+        )
 
         self.vol = VolatilityAPI(self.memfile, self.osprofile)
 
@@ -1014,14 +981,11 @@ class VolatilityManager(object):
             if profiles:
                 return False
 
-        if not config("memory:%s:enabled" % plugin_name):
+        if not config(f"memory:{plugin_name}:enabled"):
             log.debug("Skipping '%s' volatility module", plugin_name)
             return False
 
-        if plugin_name not in self.vol.plugins:
-            return False
-
-        return True
+        return plugin_name in self.vol.plugins
 
     def run(self):
         results = {}
@@ -1048,17 +1012,17 @@ class VolatilityManager(object):
 
         for akey in old.keys():
             new[akey] = {"config": old[akey]["config"], "data": []}
-            do_filter = config("memory:%s:filter" % akey)
+            do_filter = config(f"memory:{akey}:filter")
             new[akey]["config"]["filter"] = do_filter
             for item in old[akey]["data"]:
                 # TODO: need to improve this logic.
                 if not do_filter:
                     new[akey]["data"].append(item)
-                elif "process_id" in item and \
-                        item["process_id"] in self.mask_pid and \
-                        item["process_id"] not in self.taint_pid:
-                    pass
-                else:
+                elif (
+                    "process_id" not in item
+                    or item["process_id"] not in self.mask_pid
+                    or item["process_id"] in self.taint_pid
+                ):
                     new[akey]["data"].append(item)
         return new
 

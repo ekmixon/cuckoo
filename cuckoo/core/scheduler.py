@@ -90,7 +90,7 @@ class AnalysisManager(threading.Thread):
 
         self.store_task_info()
 
-        if self.task.category == "file" or self.task.category == "archive":
+        if self.task.category in ["file", "archive"]:
             # Check if we have permissions to access the file.
             # And fail this analysis if we don't have access to the file.
             if not os.access(self.task.target, os.R_OK):
@@ -202,10 +202,10 @@ class AnalysisManager(threading.Thread):
             options["file_name"] = File(self.task.target).get_name()
             options["file_type"] = File(self.task.target).get_type()
             options["pe_exports"] = \
-                ",".join(File(self.task.target).get_exported_functions())
+                    ",".join(File(self.task.target).get_exported_functions())
 
             package, activity = File(self.task.target).get_apk_entry()
-            self.task.options["apk_entry"] = "%s:%s" % (package, activity)
+            self.task.options["apk_entry"] = f"{package}:{activity}"
         elif self.task.category == "archive":
             options["file_name"] = File(self.task.target).get_name()
 
@@ -220,11 +220,7 @@ class AnalysisManager(threading.Thread):
         options["clock"] = self.task.clock
         options["terminate_processes"] = self.cfg.cuckoo.terminate_processes
 
-        if not self.task.timeout:
-            options["timeout"] = self.cfg.timeouts.default
-        else:
-            options["timeout"] = self.task.timeout
-
+        options["timeout"] = self.task.timeout or self.cfg.timeouts.default
         # copy in other analyzer specific options, TEMPORARY (most likely)
         vm_options = getattr(machinery.options, self.machine.name)
         for k in vm_options:
@@ -240,7 +236,7 @@ class AnalysisManager(threading.Thread):
             "route", config("routing:routing:route")
         )
 
-        if self.route == "none" or self.route == "drop":
+        if self.route in ["none", "drop"]:
             self.interface = None
             self.rt_table = None
         elif self.route == "inetsim":
@@ -265,8 +261,8 @@ class AnalysisManager(threading.Thread):
                 self.interface = config("routing:routing:internet")
                 self.rt_table = config("routing:routing:rt_table")
         elif self.route in config("routing:vpn:vpns"):
-            self.interface = config("routing:%s:interface" % self.route)
-            self.rt_table = config("routing:%s:rt_table" % self.route)
+            self.interface = config(f"routing:{self.route}:interface")
+            self.rt_table = config(f"routing:{self.route}:rt_table")
         else:
             log.warning(
                 "Unknown network routing destination specified, ignoring "
@@ -299,7 +295,7 @@ class AnalysisManager(threading.Thread):
             self.rt_table = None
 
         # For now this doesn't work yet in combination with tor routing.
-        if self.route == "drop" or self.route == "internet":
+        if self.route in ["drop", "internet"]:
             rooter(
                 "drop_enable", self.machine.ip,
                 config("cuckoo:resultserver:ip"),
@@ -309,12 +305,14 @@ class AnalysisManager(threading.Thread):
         if self.route == "inetsim":
             machinery = config("cuckoo:cuckoo:machinery")
             rooter(
-                "inetsim_enable", self.machine.ip,
+                "inetsim_enable",
+                self.machine.ip,
                 config("routing:inetsim:server"),
-                config("%s:%s:interface" % (machinery, machinery)),
+                config(f"{machinery}:{machinery}:interface"),
                 str(self.rs_port),
-                config("routing:inetsim:ports") or ""
+                config("routing:inetsim:ports") or "",
             )
+
 
         if self.route == "tor":
             rooter(
@@ -351,7 +349,7 @@ class AnalysisManager(threading.Thread):
                 "srcroute_disable", self.rt_table, self.machine.ip
             )
 
-        if self.route == "drop" or self.route == "internet":
+        if self.route in ["drop", "internet"]:
             rooter(
                 "drop_disable", self.machine.ip,
                 config("cuckoo:resultserver:ip"),
@@ -361,12 +359,14 @@ class AnalysisManager(threading.Thread):
         if self.route == "inetsim":
             machinery = config("cuckoo:cuckoo:machinery")
             rooter(
-                "inetsim_disable", self.machine.ip,
+                "inetsim_disable",
+                self.machine.ip,
                 config("routing:inetsim:server"),
-                config("%s:%s:interface" % (machinery, machinery)),
+                config(f"{machinery}:{machinery}:interface"),
                 str(self.rs_port),
-                config("routing:inetsim:ports") or ""
+                config("routing:inetsim:ports") or "",
             )
+
 
         if self.route == "tor":
             rooter(

@@ -111,15 +111,12 @@ def cuckoo_resources():
                 "Failed to increase open file limit from %s to %s", soft, hard
             )
 
-    if limit != resource.RLIM_INFINITY:
-        # This can really affect the stability of Cuckoo, so the user should
-        # really fix it.  TODO: find a good minimum.
-        if limit <= 4096:
-            log.error("The maximum number of open files is low (%s). If you "
-                      "do not increase it, you may run into errors later "
-                      "on.", hard)
-            log.error("See also: https://cuckoo.sh/docs/faq/index.html#"
-                      "ioerror-errno-24-too-many-open-files")
+    if limit != resource.RLIM_INFINITY and limit <= 4096:
+        log.error("The maximum number of open files is low (%s). If you "
+                  "do not increase it, you may run into errors later "
+                  "on.", hard)
+        log.error("See also: https://cuckoo.sh/docs/faq/index.html#"
+                  "ioerror-errno-24-too-many-open-files")
 
     # IDEAS:
     # Check if limit is realistic versus the number of VMs
@@ -194,12 +191,7 @@ def cuckoo_init(level, ctx, cfg=None):
     init_rooter()
     init_routing()
 
-    signatures = 0
-    for sig in cuckoo.signatures:
-        if not sig.enabled:
-            continue
-        signatures += 1
-
+    signatures = sum(1 for sig in cuckoo.signatures if sig.enabled)
     if not signatures:
         log.warning(
             "It appears that you haven't loaded any Cuckoo Signatures. "
@@ -312,11 +304,7 @@ def main(ctx, debug, quiet, nolog, maxcount, ignore_vuln, user, cwd):
 @click.option("--conf", type=click.Path(exists=True, file_okay=True, readable=True), help="Flat key/value configuration file")
 def init(ctx, conf):
     """Initialize Cuckoo and its configuration."""
-    if conf and os.path.exists(conf):
-        cfg = read_kv_conf(conf)
-    else:
-        cfg = None
-
+    cfg = read_kv_conf(conf) if conf and os.path.exists(conf) else None
     # If this is a new install, also apply the provided configuration.
     cuckoo_init(logging.INFO, ctx.parent, cfg)
 

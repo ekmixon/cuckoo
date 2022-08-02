@@ -24,7 +24,7 @@ class Services(Auxiliary):
         # starting the actual analysis.
         timeout = self.task.timeout or Config().timeouts.default
         timeout += 300
-        tags = "service,%s" % service
+        tags = f"service,{service}"
 
         return db.add_service(timeout, self.task.owner, tags)
 

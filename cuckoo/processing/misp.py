@@ -35,7 +35,7 @@ class MISP(Processing):
             event_id = event.get("id")
 
             if event_id not in self.iocs:
-                url = os.path.join(self.url, "events/view", "%s" % event_id)
+                url = os.path.join(self.url, "events/view", f"{event_id}")
                 self.iocs[event_id] = {
                     "event_id": event_id,
                     "date": event.get("date"),
@@ -49,10 +49,11 @@ class MISP(Processing):
                 self.iocs[event_id]["iocs"].append(ioc)
 
     def _parse_date(self, row):
-        if not row.get("date"):
-            return datetime.datetime.now()
-
-        return datetime.datetime.strptime(row["date"], "%Y-%m-%d")
+        return (
+            datetime.datetime.strptime(row["date"], "%Y-%m-%d")
+            if row.get("date")
+            else datetime.datetime.now()
+        )
 
     def run(self):
         """Run analysis.

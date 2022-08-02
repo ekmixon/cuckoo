@@ -17,17 +17,16 @@ class Baseline(Processing):
 
     def deep_tuple(self, o, bl=None):
         if isinstance(o, (tuple, list)):
-            r = []
-            for x in o:
-                r.append(self.deep_tuple(x))
+            r = [self.deep_tuple(x) for x in o]
             return tuple(r)
 
         if isinstance(o, dict):
-            r = []
-            for k, v in sorted(o.items()):
-                if bl and k in bl:
-                    continue
-                r.append((k, self.deep_tuple(v)))
+            r = [
+                (k, self.deep_tuple(v))
+                for k, v in sorted(o.items())
+                if not bl or k not in bl
+            ]
+
             return tuple(r)
 
         return o
@@ -42,13 +41,14 @@ class Baseline(Processing):
         """Find the differences between the analysis report and the baseline
         report. Put the differences into the baseline part of the report and
         mark the existing rows with a `class_` attribute."""
-        results = {}
-
-        for plugin in baseline.keys() + report.keys():
-            results[plugin] = {
+        results = {
+            plugin: {
                 "config": {},
                 "data": [],
             }
+            for plugin in baseline.keys() + report.keys()
+        }
+
 
         # TODO Support having more keys in one report than the other.
         for plugin in set(baseline.keys() + report.keys()):
@@ -92,7 +92,7 @@ class Baseline(Processing):
             return
 
         machine = machine["name"]
-        baseline = os.path.join(self.baseline_path, "%s.json" % machine)
+        baseline = os.path.join(self.baseline_path, f"{machine}.json")
 
         # If this task has the baseline category then we're creating a new
         # baseline report for a VM (and store it right away).
@@ -116,6 +116,6 @@ class Baseline(Processing):
 
         if "memory" in self.results:
             results["memory"] = \
-                self.memory(self.baseline["memory"], self.results["memory"])
+                    self.memory(self.baseline["memory"], self.results["memory"])
 
         return results

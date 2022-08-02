@@ -45,8 +45,6 @@ class Elastic(object):
                 "pair: %s" % e
             )
         except elasticsearch.ConnectionError as e:
-            raise CuckooOperationalError(
-                "Unable to connect to ElasticSearch: %s" % e
-            )
+            raise CuckooOperationalError(f"Unable to connect to ElasticSearch: {e}")
 
 elastic = Elastic()

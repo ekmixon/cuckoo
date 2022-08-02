@@ -108,10 +108,7 @@ class Configuration(object):
         return self.families.get(name) or {}
 
     def results(self):
-        ret = []
-        for family in self.order:
-            ret.append(self.families[family])
-        return ret
+        return [self.families[family] for family in self.order]
 
 class Auxiliary(object):
     """Base abstract class for auxiliary modules."""
@@ -167,7 +164,7 @@ class Machinery(object):
 
     def pcap_path(self, task_id):
         """Return the .pcap path for this task id."""
-        return cwd("storage", "analyses", "%s" % task_id, "dump.pcap")
+        return cwd("storage", "analyses", f"{task_id}", "dump.pcap")
 
     def set_options(self, options):
         """Set machine manager options.
@@ -389,8 +386,9 @@ class Machinery(object):
                       "to status %s", waitme, label, states)
             if waitme > config("cuckoo:timeouts:vm_state"):
                 raise CuckooMachineError(
-                    "Timeout hit while for machine %s to change status" % label
+                    f"Timeout hit while for machine {label} to change status"
                 )
+
 
             time.sleep(1)
             waitme += 1
@@ -586,7 +584,7 @@ class LibVirtMachinery(Machinery):
                 status = self.RUNNING
             elif state[0] == 3:
                 status = self.PAUSED
-            elif state[0] == 4 or state[0] == 5:
+            elif state[0] in [4, 5]:
                 status = self.POWEROFF
             else:
                 status = self.ERROR
@@ -626,10 +624,7 @@ class LibVirtMachinery(Machinery):
         """Fetch machines handlers.
         @return: dict with machine label as key and handle as value.
         """
-        vms = {}
-        for vm in self.machines():
-            vms[vm.label] = self._lookup(vm.label)
-        return vms
+        return {vm.label: self._lookup(vm.label) for vm in self.machines()}
 
     def _lookup(self, label):
         """Search for a virtual machine.
@@ -664,10 +659,7 @@ class LibVirtMachinery(Machinery):
         """Check if libvirt release supports snapshots.
         @return: True or false.
         """
-        if libvirt.getVersion() >= 8000:
-            return True
-        else:
-            return False
+        return libvirt.getVersion() >= 8000
 
     def _get_snapshot(self, label):
         """Get current snapshot for virtual machine
@@ -879,17 +871,14 @@ class Signature(object):
                 for item in subject:
                     if exp.match(item):
                         ret.add(item)
-            else:
-                if exp.match(subject):
-                    ret.add(subject)
-        else:
-            if isinstance(subject, list):
-                for item in subject:
-                    if item.lower() == pattern.lower():
-                        ret.add(item)
-            else:
-                if subject == pattern:
-                    ret.add(subject)
+            elif exp.match(subject):
+                ret.add(subject)
+        elif isinstance(subject, list):
+            for item in subject:
+                if item.lower() == pattern.lower():
+                    ret.add(item)
+        elif subject == pattern:
+            ret.add(subject)
 
         # Return all elements.
         if all:
@@ -899,10 +888,7 @@ class Signature(object):
             return ret.pop()
 
     def get_results(self, key=None, default=None):
-        if key:
-            return self._caller.results.get(key, default)
-
-        return self._caller.results
+        return self._caller.results.get(key, default) if key else self._caller.results
 
     def get_processes(self, name=None):
         """Get a list of processes.
@@ -1174,10 +1160,7 @@ class Signature(object):
                       expression or not and therefore should be compiled.
         @return: boolean with the result of the check.
         """
-        domains = set()
-        for item in self.get_net_domains():
-            domains.add(item["domain"])
-
+        domains = {item["domain"] for item in self.get_net_domains()}
         return self._check_value(pattern=pattern,
                                  subject=list(domains),
                                  regex=regex,
@@ -1190,10 +1173,7 @@ class Signature(object):
                       expression or not and therefore should be compiled.
         @return: boolean with the result of the check.
         """
-        urls = set()
-        for item in self.get_net_http():
-            urls.add(item["uri"])
-
+        urls = {item["uri"] for item in self.get_net_http()}
         return self._check_value(pattern=pattern,
                                  subject=list(urls),
                                  regex=regex,
@@ -1204,10 +1184,10 @@ class Signature(object):
         @param pattern: string or expression to check for.
         @return: True/False
         """
-        for alert in self.get_results("suricata", {}).get("alerts", []):
-            if re.findall(pattern, alert.get("signature", ""), re.I):
-                return True
-        return False
+        return any(
+            re.findall(pattern, alert.get("signature", ""), re.I)
+            for alert in self.get_results("suricata", {}).get("alerts", [])
+        )
 
     def init(self):
         """Allow signatures to initialize themselves."""
@@ -1251,8 +1231,8 @@ class Signature(object):
         mark = {
             "type": "volatility",
             "plugin": plugin,
-        }
-        mark.update(kwargs)
+        } | kwargs
+
         self.marks.append(mark)
 
     def mark_config(self, config):
@@ -1269,15 +1249,13 @@ class Signature(object):
         """Mark arbitrary data."""
         mark = {
             "type": "generic",
-        }
-        mark.update(kwargs)
+        } | kwargs
+
         self.marks.append(mark)
 
     def has_marks(self, count=None):
         """Return true if this signature has one or more marks."""
-        if count is not None:
-            return len(self.marks) >= count
-        return not not self.marks
+        return len(self.marks) >= count if count is not None else bool(self.marks)
 
     def on_call(self, call, process):
         """Notify signature about API call. Return value determines
@@ -1328,10 +1306,7 @@ class Signature(object):
 
     def extend_ttp(self):
         """Find the short and long descriptions for the TTPs of a signature"""
-        d = {}
-        for t in self.ttp:
-            d[t] = self._caller.ttp_descriptions.get(t)
-        return d
+        return {t: self._caller.ttp_descriptions.get(t) for t in self.ttp}
 
     def results(self):
         """Turn this signature into actionable results."""

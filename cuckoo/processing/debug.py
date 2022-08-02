@@ -53,13 +53,9 @@ class Debug(Processing):
                 f = codecs.open(self.log_path, "rb", "utf-8")
                 debug["log"] = f.readlines()
             except ValueError as e:
-                raise CuckooProcessingError(
-                    "Error decoding %s: %s" % (self.log_path, e)
-                )
+                raise CuckooProcessingError(f"Error decoding {self.log_path}: {e}")
             except (IOError, OSError) as e:
-                raise CuckooProcessingError(
-                    "Error opening %s: %s" % (self.log_path, e)
-                )
+                raise CuckooProcessingError(f"Error opening {self.log_path}: {e}")
         else:
             log.error(
                 "Error processing task #%d: it appears that the Virtual "

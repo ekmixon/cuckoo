@@ -69,7 +69,7 @@ def fetch_community(branch="master", force=False, filepath=None):
         mkdir(cwd(outfolder))
 
         # E.g., "community-master/modules/signatures".
-        name_start = "%s/%s" % (directory, tarfolder)
+        name_start = f"{directory}/{tarfolder}"
         for member in members:
             if not member.name.startswith(name_start) or \
                     name_start == member.name:
@@ -107,12 +107,12 @@ def enumerate_files(path, pattern):
             for filename in filenames:
                 filepath = os.path.join(dirname, filename)
 
-                if os.path.isfile(filepath):
-                    if pattern:
-                        if fnmatch.fnmatch(filename, pattern):
-                            yield to_unicode(filepath)
-                    else:
-                        yield to_unicode(filepath)
+                if os.path.isfile(filepath) and (
+                    pattern
+                    and fnmatch.fnmatch(filename, pattern)
+                    or not pattern
+                ):
+                    yield to_unicode(filepath)
 
 def submit_tasks(target, options, package, custom, owner, timeout, priority,
                  machine, platform, memory, enforce_timeout, clock, tags,
@@ -291,8 +291,10 @@ def process_task_range(tasks):
 
     for task_id in sorted(set(task_ids)):
         task = db.view_task(task_id)
-        if not task:
-            task = {
+        task = (
+            task.to_dict()
+            if task
+            else {
                 "id": task_id,
                 "category": "file",
                 "target": "",
@@ -300,8 +302,7 @@ def process_task_range(tasks):
                 "package": None,
                 "custom": None,
             }
-        else:
-            task = task.to_dict()
+        )
 
         if os.path.isdir(cwd(analysis=task_id)):
             process_task(Dictionary(task))
@@ -313,19 +314,13 @@ def process_check_stop(count, maxcount, endtime):
     if maxcount and count >= maxcount:
         return False
 
-    if endtime and int(time.time()) > endtime:
-        return False
-
-    return True
+    return not endtime or int(time.time()) <= endtime
 
 def process_tasks(instance, maxcount, timeout):
     count = 0
-    endtime = 0
     db = Database()
 
-    if timeout:
-        endtime = int(time.time() + timeout)
-
+    endtime = int(time.time() + timeout) if timeout else 0
     try:
         while process_check_stop(count, maxcount, endtime):
             task_id = db.processing_get_task(instance)
@@ -387,13 +382,13 @@ def cuckoo_clean():
             "monthly": "%Y-%m",
             "daily": "%Y-%m-%d",
         }[elastic.index_time_pattern])
-        dated_index = "%s-%s" % (elastic.index, date_index)
+        dated_index = f"{elastic.index}-{date_index}"
 
         elastic.client.indices.delete(
             index=dated_index, ignore=[400, 404]
         )
 
-        template_name = "%s_template" % dated_index
+        template_name = f"{dated_index}_template"
         if elastic.client.indices.exists_template(template_name):
             elastic.client.indices.delete_template(template_name)
 
@@ -460,9 +455,18 @@ def cuckoo_machine(vmname, action, ip, platform, options, tags,
         }
 
         db.add_machine(
-            vmname, vmname, ip, platform, options, tags, interface, snapshot,
-            resultserver_ip, int(resultserver_port)
+            vmname,
+            vmname,
+            ip,
+            platform,
+            options,
+            tags,
+            interface,
+            snapshot,
+            resultserver_ip,
+            resultserver_port,
         )
+
         db.unlock_machine(vmname)
 
     if action == "delete":
@@ -477,9 +481,7 @@ def cuckoo_machine(vmname, action, ip, platform, options, tags,
     write_cuckoo_conf(cfg=cfg)
 
 def migrate_database(revision="head"):
-    args = [
-        "alembic", "-x", "cwd=%s" % cwd(), "upgrade", revision,
-    ]
+    args = ["alembic", "-x", f"cwd={cwd()}", "upgrade", revision]
     try:
         subprocess.check_call(args, cwd=cwd("db_migration", private=True))
     except subprocess.CalledProcessError:

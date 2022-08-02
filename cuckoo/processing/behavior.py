@@ -328,8 +328,8 @@ class BehaviorAnalysis(Processing):
 
                 # If available go for the specific event type handler rather
                 # than the generic handle_event.
-                if hasattr(h, "handle_%s_event" % event_type):
-                    fn = getattr(h, "handle_%s_event" % event_type)
+                if hasattr(h, f"handle_{event_type}_event"):
+                    fn = getattr(h, f"handle_{event_type}_event")
                     interest_map[event_type].append(fn)
                 elif h.handle_event not in interest_map[event_type]:
                     interest_map[event_type].append(h.handle_event)
@@ -362,11 +362,11 @@ class BehaviorAnalysis(Processing):
 
         for handler in handlers:
             try:
-                r = handler.run()
-                if not r:
+                if r := handler.run():
+                    behavior[handler.key] = r
+                else:
                     continue
 
-                behavior[handler.key] = r
             except:
                 log.exception("Failed to run partial behavior class \"%s\"", handler.key)
 

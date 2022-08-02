@@ -22,7 +22,7 @@ class PS1(Package):
 
         # Enforce the .ps1 file extension as is required by powershell.
         if not path.endswith(".ps1"):
-            os.rename(path, path + ".ps1")
+            os.rename(path, f"{path}.ps1")
             path += ".ps1"
             log.info("Submitted file is missing extension, added .ps1")
 
@@ -30,4 +30,4 @@ class PS1(Package):
             "-NoProfile", "-ExecutionPolicy", "unrestricted", "-File", path
         ]
 
-        return self.execute(powershell, args=args, trigger="file:%s" % path)
+        return self.execute(powershell, args=args, trigger=f"file:{path}")

@@ -25,21 +25,16 @@ class AnalysisInfo(Processing):
         self.key = "info"
 
         db = Database()
-        dbtask = db.view_task(self.task["id"], details=True)
-
-        # Fetch the task.
-        if dbtask:
+        if dbtask := db.view_task(self.task["id"], details=True):
             task = dbtask.to_dict()
+        elif os.path.isfile(self.taskinfo_path):
+            # We've got task.json, so grab info from there.
+            task = json_decode(open(self.taskinfo_path).read())
         else:
-            # Task is gone from the database.
-            if os.path.isfile(self.taskinfo_path):
-                # We've got task.json, so grab info from there.
-                task = json_decode(open(self.taskinfo_path).read())
-            else:
-                # We don't have any info on the task :(
-                emptytask = Task()
-                emptytask.id = self.task["id"]
-                task = emptytask.to_dict()
+            # We don't have any info on the task :(
+            emptytask = Task()
+            emptytask.id = self.task["id"]
+            task = emptytask.to_dict()
 
         # Get git head.
         if os.path.exists(cwd(".cwd")):

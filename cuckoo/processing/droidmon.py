@@ -18,44 +18,44 @@ class Droidmon(Processing):
     def __init__(self):
         self.key = "droidmon"
 
-        self.droidmon = {}
-
-        self.droidmon["crypto_keys"] = []
-        self.droidmon["reflection_calls"] = set()
-        self.droidmon["SystemProperties"] = set()
-        self.droidmon["started_activities"] = []
-        self.droidmon["file_accessed"] = set()
-        self.droidmon["fingerprint"] = set()
-        self.droidmon["registered_receivers"] = set()
-        self.droidmon["SharedPreferences"] = []
-        self.droidmon["ContentResolver_queries"] = set()
-        self.droidmon["ContentValues"] = []
-        self.droidmon["encoded_base64"] = []
-        self.droidmon["decoded_base64"] = []
-        self.droidmon["commands"] = set()
-        self.droidmon["commands_output"] = set()
-        self.droidmon["ComponentEnabledSetting"] = []
-        self.droidmon["data_leak"] = set()
-        self.droidmon["events"] = set()
-        self.droidmon["crypto_data"] = []
-        self.droidmon["mac_data"] = []
-        self.droidmon["handleReceiver"] = []
-        self.droidmon["sms"] = []
-        self.droidmon["killed_process"] = []
-        self.droidmon["findResource"] = []
-        self.droidmon["findLibrary"] = []
-        self.droidmon["loadDex"] = set()
-        self.droidmon["TelephonyManager_listen"] = set()
-        self.droidmon["registerContentObserver"] = set()
-        self.droidmon["accounts"] = set()
-        self.droidmon["DexClassLoader"] = []
-        self.droidmon["DexFile"] = []
-        self.droidmon["PathClassLoader"] = []
-        self.droidmon["loadClass"] = set()
-        self.droidmon["setMobileDataEnabled"] = set()
-        self.droidmon["httpConnections"] = []
-        self.droidmon["error"] = []
-        self.droidmon["raw"] = []
+        self.droidmon = {
+            "crypto_keys": [],
+            "reflection_calls": set(),
+            "SystemProperties": set(),
+            "started_activities": [],
+            "file_accessed": set(),
+            "fingerprint": set(),
+            "registered_receivers": set(),
+            "SharedPreferences": [],
+            "ContentResolver_queries": set(),
+            "ContentValues": [],
+            "encoded_base64": [],
+            "decoded_base64": [],
+            "commands": set(),
+            "commands_output": set(),
+            "ComponentEnabledSetting": [],
+            "data_leak": set(),
+            "events": set(),
+            "crypto_data": [],
+            "mac_data": [],
+            "handleReceiver": [],
+            "sms": [],
+            "killed_process": [],
+            "findResource": [],
+            "findLibrary": [],
+            "loadDex": set(),
+            "TelephonyManager_listen": set(),
+            "registerContentObserver": set(),
+            "accounts": set(),
+            "DexClassLoader": [],
+            "DexFile": [],
+            "PathClassLoader": [],
+            "loadClass": set(),
+            "setMobileDataEnabled": set(),
+            "httpConnections": [],
+            "error": [],
+            "raw": [],
+        }
 
     def _handle_android_os_SystemProperties_get(self, api_call):
         self.droidmon["SystemProperties"].add(api_call["args"][0])
@@ -283,12 +283,13 @@ class Droidmon(Processing):
         self.droidmon["setMobileDataEnabled"].append(api_call["args"][0])
 
     def _handle_org_apache_http_impl_client_AbstractHttpClient_execute(self, api_call):
-        json = {}
-        if type(api_call["args"][0]) is dict:
-            json["request"] = api_call["args"][1]
-        else:
-            json["request"] = api_call["args"][0]
-        json["response"] = api_call["result"]
+        json = {
+            "request": api_call["args"][1]
+            if type(api_call["args"][0]) is dict
+            else api_call["args"][0],
+            "response": api_call["result"],
+        }
+
         self.droidmon["httpConnections"].append(json)
 
     def _handle_java_net_URL_openConnection(self, api_call):
@@ -314,15 +315,11 @@ class Droidmon(Processing):
             self.droidmon["commands"].add(command)
 
     def _handle_java_io_FileInputStream_read(self, api_call):
-        pass
         # self.droidmon["command_objects"].append(api_call)
         self.droidmon["commands_output"].add("read: "+api_call["buffer"])
 
     def get_pair(self, api_call):
-        value = None
-        if len(api_call["args"]) > 1:
-            value = api_call["args"][1]
-
+        value = api_call["args"][1] if len(api_call["args"]) > 1 else None
         return {
             "key": api_call["args"][0],
             "value": value,
@@ -349,9 +346,7 @@ class Droidmon(Processing):
             return d
         if type(d) is list:
             return map(self.keyCleaner, d)
-        if type(d) is tuple:
-            return tuple(map(self.keyCleaner, d))
-        return d
+        return tuple(map(self.keyCleaner, d)) if type(d) is tuple else d
 
     def run(self):
         """Run extract of printable strings.
@@ -376,9 +371,8 @@ class Droidmon(Processing):
             self.droidmon["raw"].append(self.keyCleaner(api_call))
 
             # Construct the function name of the handler for this event.
-            api = "_handle_%s_%s" % (api_call["class"], api_call["method"])
-            fn = getattr(self, api.replace(".", "_"), None)
-            if fn:
+            api = f'_handle_{api_call["class"]}_{api_call["method"]}'
+            if fn := getattr(self, api.replace(".", "_"), None):
                 fn(api_call)
             else:
                 self.droidmon["error"].append("Unhandled: %r" % line)

@@ -71,7 +71,7 @@ class HandlerContext(object):
         self.buf = ""
 
     def __repr__(self):
-        return "<Context for %s>" % self.command
+        return f"<Context for {self.command}>"
 
     def cancel(self):
         """Cancel this context; gevent might complain about this with an
@@ -138,12 +138,11 @@ class WriteLimiter(object):
         if write:
             self.fd.write(buf[:write])
             self.remain -= write
-        if size and size != write:
-            if not self.warned:
-                log.warning("Uploaded file length larger than upload_max_size, "
-                            "stopping upload.")
-                self.fd.write("... (truncated)")
-                self.warned = True
+        if size and size != write and not self.warned:
+            log.warning("Uploaded file length larger than upload_max_size, "
+                        "stopping upload.")
+            self.fd.write("... (truncated)")
+            self.warned = True
 
     def flush(self):
         self.fd.flush()
@@ -393,10 +392,7 @@ class ResultServer(object):
                     "for more information." % (ip, port, e)
                 )
             else:
-                raise CuckooCriticalError(
-                    "Unable to bind ResultServer on %s:%s: %s" %
-                    (ip, port, e)
-                )
+                raise CuckooCriticalError(f"Unable to bind ResultServer on {ip}:{port}: {e}")
 
         # We allow user to specify port 0 to get a random port, report it back
         # here
@@ -417,9 +413,6 @@ class ResultServer(object):
         self.instance.del_task(task.id, machine.ip)
 
     def create_server(self, sock, pool_size):
-        if pool_size:
-            pool = gevent.pool.Pool(pool_size)
-        else:
-            pool = 'default'
+        pool = gevent.pool.Pool(pool_size) if pool_size else 'default'
         self.instance = GeventResultServerWorker(sock, spawn=pool)
         self.instance.do_run()

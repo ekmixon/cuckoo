@@ -86,7 +86,7 @@ class Files(object):
             log.info("Error dumping file from path \"%s\": %s", filepath, e)
             return
 
-        filename = "%s_%s" % (sha256[:16], os.path.basename(filepath))
+        filename = f"{sha256[:16]}_{os.path.basename(filepath)}"
         upload_path = os.path.join("files", filename)
 
         try:
@@ -155,10 +155,7 @@ class ProcessList(object):
         if int(pid) in self.pids:
             return True
 
-        if notrack and int(pid) in self.pids_notrack:
-            return True
-
-        return False
+        return bool(notrack and int(pid) in self.pids_notrack)
 
     def remove_pid(self, pid):
         """Remove a process identifier from being tracked."""
@@ -273,9 +270,9 @@ class CommandPipeHandler(object):
 
             # If we have both pid and tid, then we can use APC to inject.
             if process_id and thread_id:
-                proc.inject(dll, apc=True, mode="%s" % mode)
+                proc.inject(dll, apc=True, mode=f"{mode}")
             else:
-                proc.inject(dll, apc=False, mode="%s" % mode)
+                proc.inject(dll, apc=False, mode=f"{mode}")
 
             log.info("Injected into process with pid %s and name %r",
                      proc.pid, filename)
@@ -367,7 +364,7 @@ class CommandPipeHandler(object):
             Process(pid=pid).dump_memory_block(int(addr), int(length))
 
     def _handle_track(self, data):
-        if not data.count(":") == 2:
+        if data.count(":") != 2:
             log.warning("Received TRACK command with an incorrect argument %r.", data)
             return
 
@@ -396,11 +393,7 @@ class CommandPipeHandler(object):
             else:
                 self.pid, command, arguments = data.strip().split(":", 2)
 
-            fn = getattr(self, "_handle_%s" % command.lower(), None)
-            if not fn:
-                log.critical("Unknown command received from the monitor: %r",
-                             data.strip())
-            else:
+            if fn := getattr(self, f"_handle_{command.lower()}", None):
                 try:
                     response = fn(arguments)
                 except:
@@ -409,6 +402,9 @@ class CommandPipeHandler(object):
                         "%s args %r).", command, arguments
                     )
 
+            else:
+                log.critical("Unknown command received from the monitor: %r",
+                             data.strip())
         return response
 
 class Analyzer(object):
@@ -566,7 +562,7 @@ class Analyzer(object):
             package = self.config.package
 
         # Generate the package path.
-        package_name = "modules.packages.%s" % package
+        package_name = f"modules.packages.{package}"
 
         # Try to import the analysis package.
         try:
@@ -598,7 +594,7 @@ class Analyzer(object):
 
         # Initialize Auxiliary modules
         Auxiliary()
-        prefix = auxiliary.__name__ + "."
+        prefix = f"{auxiliary.__name__}."
         for loader, name, ispkg in pkgutil.iter_modules(auxiliary.__path__, prefix):
             if ispkg:
                 continue
@@ -652,19 +648,10 @@ class Analyzer(object):
         # Propagate the requested dump interval, if set.
         zer0m0n.dumpint(int(self.config.options.get("dumpint", "0")))
 
-        # Start analysis package. If for any reason, the execution of the
-        # analysis package fails, we have to abort the analysis.
-        pids = self.package.start(self.target)
-
-        # If the analysis package returned a list of process identifiers, we
-        # add them to the list of monitored processes and enable the process monitor.
-        if pids:
+        if pids := self.package.start(self.target):
             self.process_list.add_pids(pids)
             pid_check = True
 
-        # If the package didn't return any process ID (for example in the case
-        # where the package isn't enabling any behavioral analysis), we don't
-        # enable the process monitor.
         else:
             log.info("No process IDs returned by the package, running "
                      "for the full timeout.")

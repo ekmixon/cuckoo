@@ -51,9 +51,7 @@ class Irma(Processing):
         files = {
             "files": open(filepath, "rb"),
         }
-        url = urlparse.urljoin(
-            self.url, "/api/v1.1/scans/%s/files" % init.get("id")
-        )
+        url = urlparse.urljoin(self.url, f'/api/v1.1/scans/{init.get("id")}/files')
         self._post_json(url, files=files,)
 
         # launch posted file scan
@@ -62,30 +60,26 @@ class Irma(Processing):
         }
         if self.options.get("probes"):
             params["probes"] = self.options.get("probes")
-        url = urlparse.urljoin(
-            self.url, "/api/v1.1/scans/%s/launch" % init.get("id")
-        )
+        url = urlparse.urljoin(self.url, f'/api/v1.1/scans/{init.get("id")}/launch')
         requests.post(url, json=params)
 
         result = None
 
         start = time.time()
-        while result is None or result.get("status") != self.IRMA_FINISHED_STATUS:
-            if start + self.timeout < time.time():
-                break
-
+        while (
+            result is None or result.get("status") != self.IRMA_FINISHED_STATUS
+        ) and not start + self.timeout < time.time():
             log.debug("Polling for results for ID %s", init.get("id"))
-            url = urlparse.urljoin(
-                self.url, "/api/v1.1/scans/%s" % init.get("id")
-            )
+            url = urlparse.urljoin(self.url, f'/api/v1.1/scans/{init.get("id")}')
             result = self._request_json(url)
             time.sleep(1)
 
     def _get_results(self, sha256):
         # Fetch list of scan IDs.
         results = self._request_json(
-            urlparse.urljoin(self.url, "/api/v1.1/files/%s" % sha256)
+            urlparse.urljoin(self.url, f"/api/v1.1/files/{sha256}")
         )
+
 
         if not results.get("items"):
             log.info("File %s hasn't been scanned before", sha256)
@@ -93,7 +87,7 @@ class Irma(Processing):
 
         result_id = results["items"][-1]["result_id"]
         return self._request_json(
-            urlparse.urljoin(self.url, "/api/v1.1/results/%s" % result_id)
+            urlparse.urljoin(self.url, f"/api/v1.1/results/{result_id}")
         )
 
     def run(self):
@@ -118,7 +112,7 @@ class Irma(Processing):
 
         if not self.force and not self.scan and not results:
             return {}
-        elif self.force or (not results and self.scan):
+        elif self.force or not results:
             log.info("File scan requested: %s", sha256)
             self._scan_file(self.file_path, self.force)
             results = self._get_results(sha256) or {}
@@ -129,7 +123,7 @@ class Irma(Processing):
         # related to  https://github.com/elastic/elasticsearch/issues/15377
         # entropy value is sometimes 0 and sometimes like  0.10191042566270775
         # other issue is that results type changes between string and object :/
-        
+
         for idx, result in enumerate(results["probe_results"]):
             if result["name"] == "PE Static Analyzer":
                 log.debug("Ignoring PE results at index {0}".format(idx))
@@ -141,7 +135,7 @@ class Irma(Processing):
             compatible with other results.
             """
             if result["name"] == "VirusTotal" \
-                    and results["probe_results"][idx]["results"].startswith("detected by 0/"):
+                        and results["probe_results"][idx]["results"].startswith("detected by 0/"):
                 log.debug("Fixing empty match from VT")
                 results["probe_results"][idx]["status"] = 0
                 results["probe_results"][idx]["results"] = None

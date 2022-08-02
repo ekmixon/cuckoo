@@ -29,7 +29,9 @@ class KVM(LibVirtMachinery):
         try:
             return libvirt.open(self.dsn)
         except libvirt.libvirtError as libvex:
-            raise CuckooCriticalError("libvirt returned an exception on connection: %s" % libvex)
+            raise CuckooCriticalError(
+                f"libvirt returned an exception on connection: {libvex}"
+            )
 
     def _disconnect(self, conn):
         """Disconnect, ignore request to disconnect."""

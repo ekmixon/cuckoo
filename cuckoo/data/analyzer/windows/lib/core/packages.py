@@ -12,10 +12,7 @@ def has_com_exports(exports):
         "DllUnregisterServer",
     ]
 
-    for name in com_exports:
-        if name not in exports:
-            return False
-    return True
+    return all(name in exports for name in com_exports)
 
 def choose_package(file_type, file_name, exports):
     """Choose analysis package due to file type and file extension.

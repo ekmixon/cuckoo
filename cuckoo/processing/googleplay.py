@@ -77,6 +77,6 @@ class GooglePlay(Processing):
                     googleplay["upload_date"] = app_detail.uploadDate
                     googleplay["permissions"] = app_detail.permission._values
             except (IOError, OSError, zipfile.BadZipfile) as e:
-                raise CuckooProcessingError("Error opening file %s" % e)
+                raise CuckooProcessingError(f"Error opening file {e}")
 
         return googleplay
